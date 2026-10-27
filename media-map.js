@@ -1,4 +1,4 @@
-import { MediaMap, planMedia, checkAbort } from './map-writer.js';
+import { MediaMap, planMedia, checkAbort } from './map-writer.js?v=20261027-background-hq-2';
 
 const $ = id => document.getElementById(id);
 const fileInput = $('media-file');
