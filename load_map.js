@@ -13,7 +13,7 @@ var Module = {
 };
 function SetStatus(message, error) {
     var status = document.getElementById('viewer-status');
-    status.textContent = message;
+    I18n.text(status, message);
     status.classList.toggle('error', !!error);
 }
 function RemoveEls() {

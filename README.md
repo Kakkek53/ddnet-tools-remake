@@ -38,6 +38,14 @@ Run `node --test tests/map-writer.test.mjs` (Node 22+). Tests independently pars
 
 ### Full-screen backgrounds
 
-The default layout now follows the supplied Night Themes map: media is centered at `(0,0)` in a group with **0/0 parallax**, independent of player movement and camera zoom. Quads cover at least the reference bounds `(-832,-640)` to `(832,640)` while preserving source aspect ratio. DDNet normal viewports are capped at 1500×1050 world units, so this covers normal aspect ratios including ultrawide. Screens with different aspect ratios crop the edges rather than stretch the image. The game layer remains in a separate 100/100 group. Background exports have no visible platform or untextured gray overlay; object mode retains its separate platform group. Select **Object inside the map** to use the original world-space placement.
+The default layout uses a screen-filling background: media is centered at `(0,0)` in a group with **0/0 parallax**, independent of player movement and camera zoom. Quads cover at least the reference bounds `(-832,-640)` to `(832,640)` while preserving source aspect ratio. DDNet normal viewports are capped at 1500×1050 world units, so this covers normal aspect ratios including ultrawide. Screens with different aspect ratios crop the edges rather than stretch the image. The game layer remains in a separate 100/100 group. Background exports have no visible platform or untextured gray overlay; object mode retains its separate platform group. Select **Object inside the map** to use the original world-space placement.
 
 Quality and in-map size are independent: increasing texture pixels adds detail without shrinking the background. Full-resolution frames larger than 1024 px use exact-size textures with full 0–1 UVs, avoiding power-of-two padding and atlas UV quantization. For long high-resolution videos, reduce FPS or the selected duration to stay within the explicit texture-memory and image-count limits; quality is never silently lowered.
+
+## Interface languages
+
+All four web pages support English, Russian, and German. The language selector in the header updates navigation, help, accessibility labels, conversion estimates, progress and validation messages without reloading or discarding the selected file/download. The initial language follows the browser; an explicit selection is saved in `localStorage` when available. Blocked storage falls back to a working session selection.
+
+The shared catalog and safe text rendering live in `i18n.js`. Keep English source messages as catalog keys, and use `I18n.text(elementOrId, key, parameters)` for dynamic content that must update during language changes. User text is never injected as HTML. The precompiled DDNet engine's own canvas controls and native browser media controls retain their built-in languages; the surrounding viewer interface is localized.
+
+Run all format and translation tests with `node --test tests/*.test.mjs`.

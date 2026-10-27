@@ -108,7 +108,7 @@ test('names use DDNet signed-byte packing',()=>{
     const name=packedName('Game',3);assert.equal(name[0]>>>0,0xc7e1ede5);assert.equal(name.at(-1)&255,0);
 });
 
-test('background matches Night Themes coverage and ignores camera movement and zoom', async () => {
+test('background covers the viewport and ignores camera movement and zoom', async () => {
     const plan = planMedia(1920,1080,4096,1,1), writer = new MediaMap(plan,false);
     const page = plan.pages[0];
     assert.equal(plan.width,1920); assert.equal(plan.height,1080);

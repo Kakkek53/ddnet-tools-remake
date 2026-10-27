@@ -116,7 +116,7 @@ export class MediaMap {
         this.plan = plan; this.animated = animated; this.writer = new DataFile(signal);
         this.points = []; this.nextPage = 0;
         this.background = options.placement !== 'object';
-        // Night Themes.map uses a centered 1664×1280 background with 0/0 parallax.
+        // The background uses a centered 1664×1280 background with 0/0 parallax.
         // DDNet's normal viewport is capped at 1500×1050 world units. Cover the
         // reference bounds, preserving the media aspect ratio rather than stretching.
         const scale = this.background ? Math.max(1664 / plan.width, 1280 / plan.height) : 1024 / Math.max(plan.width, plan.height);

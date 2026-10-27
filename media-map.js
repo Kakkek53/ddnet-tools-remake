@@ -1,4 +1,4 @@
-import { MediaMap, planMedia, checkAbort } from './map-writer.js?v=20261027-background-clean-3';
+import { MediaMap, planMedia, checkAbort } from './map-writer.js?v=20261027-i18n-4';
 
 const $ = id => document.getElementById(id);
 const fileInput = $('media-file');
@@ -6,7 +6,7 @@ const video = $('media-video');
 const image = $('media-image');
 const status = $('conversion-status');
 let source = null, sourceURL = null, downloadURL = null, controller = null, generation = 0;
-function say(message, error = false) { status.textContent = message; status.classList.toggle('error', error); }
+function say(message, error = false, params = {}) { I18n.text(status, message, params); status.classList.toggle('error', error); }
 function revokeDownload() {
     if (downloadURL) URL.revokeObjectURL(downloadURL);
     downloadURL = null; $('download-map').hidden = true;
@@ -51,24 +51,29 @@ function updateEstimate() {
     if (!source) return;
     try {
         const plan = getPlan();
-        $('media-estimate').textContent = `${plan.width} × ${plan.height} px · ${plan.count} frame${plan.count === 1 ? '' : 's'} · ${plan.pages.length} atlas${plan.pages.length === 1 ? '' : 'es'} · ${(plan.textureBytes / 1048576).toFixed(1)} MiB texture memory · ${$('media-placement').value === 'object' ? 'map object' : 'full-screen background'}${source.animated ? ` · ${(plan.totalMs / 1000).toFixed(3)} s loop` : ''}`;
+        I18n.text('media-estimate', '{width} × {height} px · frames: {count} · textures: {textures} · {memory} MiB texture memory · {placement}{loop}', {
+            width: plan.width, height: plan.height, count: plan.count, textures: plan.pages.length,
+            memory: (plan.textureBytes / 1048576).toFixed(1),
+            placement: $('media-placement').value === 'object' ? 'map object' : 'full-screen background',
+            loop: source.animated ? ` · ${(plan.totalMs / 1000).toFixed(3)} s loop` : ''
+        });
         $('convert-media').disabled = false;
         say('Ready to create your map.');
-    } catch (error) { $('convert-media').disabled = true; $('media-estimate').textContent = error.message; say(error.message, true); }
+    } catch (error) { $('convert-media').disabled = true; I18n.text('media-estimate', error.message); say(error.message, true); }
 }
 fileInput.addEventListener('change', async () => {
     const id = ++generation;
     const file = fileInput.files[0];
     source = null; revokeDownload(); $('convert-media').disabled = true;
     $('preview-empty').hidden = false; video.hidden = true; image.hidden = true;
-    $('source-details').textContent = 'No media selected'; $('media-filename').textContent = 'or drop a file here';
-    $('video-settings').hidden = true; $('media-estimate').textContent = 'Choose a file to see the export estimate.';
+    I18n.text('source-details', 'No media selected'); I18n.text('media-filename', 'or drop a file here');
+    $('video-settings').hidden = true; I18n.text('media-estimate', 'Choose a file to see the export estimate.');
     video.pause(); video.removeAttribute('src'); video.load(); image.removeAttribute('src');
     if (sourceURL) URL.revokeObjectURL(sourceURL);
     sourceURL = null;
     if (!file) { say('Choose an image or a video to get started.'); return; }
     if (!file.size) { say('The selected file is empty.', true); return; }
-    $('media-filename').textContent = file.name;
+    I18n.text('media-filename', '{name}', { name: file.name });
     const animated = file.type.startsWith('video/') || /\.(mp4|webm|mov|m4v|ogv)$/i.test(file.name);
     if (!animated && !file.type.startsWith('image/') && !/\.(png|jpe?g|webp|gif|avif|bmp)$/i.test(file.name)) { say('Choose an image or a video file.', true); return; }
     sourceURL = URL.createObjectURL(file);
@@ -84,7 +89,7 @@ fileInput.addEventListener('change', async () => {
             $('media-resolution').value = '1920';
             $('clip-end').value = Math.min(video.duration, 5).toFixed(3);
             $('clip-end').max = video.duration; $('clip-start').max = video.duration;
-            $('source-details').textContent = `${video.videoWidth} × ${video.videoHeight} · ${video.duration.toFixed(3)} seconds · video`;
+            I18n.text('source-details', '{width} × {height} · {duration} seconds · video', {width: video.videoWidth, height: video.videoHeight, duration: video.duration.toFixed(3)});
             video.hidden = false; $('video-settings').hidden = false;
         } else {
             const ready = eventOnce(image, 'load'); image.src = sourceURL; await ready;
@@ -92,7 +97,7 @@ fileInput.addEventListener('change', async () => {
             if (!image.naturalWidth) throw new Error('The image could not be decoded.');
             source = { file, animated, width: image.naturalWidth, height: image.naturalHeight };
             $('media-resolution').value = '4096';
-            $('source-details').textContent = `${image.naturalWidth} × ${image.naturalHeight} · still image`;
+            I18n.text('source-details', '{width} × {height} · still image', {width: image.naturalWidth, height: image.naturalHeight});
             image.hidden = false;
         }
         $('preview-empty').hidden = true;
@@ -169,7 +174,10 @@ $('convert-media').addEventListener('click', async () => {
         link.href = downloadURL;
         link.download = (source.file.name.replace(/\.[^.]*$/, '').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 48) || 'media') + '.map';
         link.hidden = false;
-        say(`Map ready · ${(blob.size / 1048576).toFixed(2)} MiB · ${plan.count} frame${plan.count === 1 ? '' : 's'}${source.animated ? ' · synchronized looping STEP envelopes' : ''}. Download and open it in the DDNet editor.`);
+        say('Map ready · {size} MiB · frames: {count}{animation}. Download and open it in the DDNet editor.', false, {
+            size: (blob.size / 1048576).toFixed(2), count: plan.count,
+            animation: source.animated ? ' · synchronized looping STEP envelopes' : ''
+        });
         link.focus();
     } catch (error) { say(error.name === 'AbortError' ? 'Conversion cancelled. You can change settings and try again.' : error.message, error.name !== 'AbortError'); }
     finally {
