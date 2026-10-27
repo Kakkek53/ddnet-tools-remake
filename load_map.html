@@ -1,45 +1,88 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-	<head>
-		<meta charset="utf-8">
-		<meta name="viewport" content="width=device-width, initial-scale=1.0">
-		<title>Demo and Map Viewer</title>
-		<style>
-			body {
-				background: #ccc;
-				font-family: sans-serif;
-			}
-			h1 {
-				font-size: 16pt;
-			}
-			.game {
-				position: absolute;
-				top: 500px;
-				left: 0px;
-				margin: 0px;
-				border: 0;
-				width: 100%;
-				height: 100%;
-				overflow: hidden;
-				display: block;
-			}
-		</style>
-		<script src="enable-threads.js"></script>
-	</head>
-	<body onload="OnLoad();">
-		<canvas class="game" id="canvas" oncontextmenu="event.preventDefault();"></canvas>
-
-		<h1 id="renderdemos">Render Demo</h1>
-		<form action='#' onsubmit="() => { return false; }">
-			<input type='file' id='DemoFileInput'>
-			<input type='button' id='DemoFileLoad' value='Load' onclick='LoadDemoFile();'>
-		</form>
-
-		<h1 id="rendermap">Render Map</h1>
-		<form action='#' onsubmit="() => { return false; }">
-			<input type='file' id='MapFileInput'>
-			<input type='button' id='MapFileLoad' value='Load' onclick='LoadMapFile();'>
-		</form>
-		<script src="load_map.js"></script>
-	</body>
-</html> 
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#111214">
+<title>Map & Demo Viewer · DDNet Tools</title>
+<link rel="stylesheet" href="styles.css">
+<script src="enable-threads.js">
+</script>
+</head>
+<body>
+<header class="topbar">
+<a class="brand" href="index.html">
+<span class="brand-icon">D<span>↗</span>
+</span>
+<span>DDNet<span class="brand-light">Tools</span>
+<small>REMAKE</small>
+</span>
+</a>
+<nav aria-label="Main navigation">
+<a href="index.html">Overview</a>
+<a href="load_map.html">Map & Demo</a>
+<a href="team-colors.html">Team Colors</a>
+</nav>
+<a class="github" href="https://github.com/Kakkek53/ddnet-tools-remake">GitHub ↗</a>
+</header>
+<main>
+<section class="page-heading">
+<div class="eyebrow">01 / MAPS & DEMOS</div>
+<h1>See the bigger <span>picture.</span>
+</h1>
+<p>Load a local file to explore it with the DDNet engine.</p>
+</section>
+<div id="upload-tools" class="tool-grid">
+<section class="panel">
+<span class="tool-icon">▧</span>
+<h2>Open a map</h2>
+<p class="muted">Explore a DDNet map in your browser.</p>
+<label class="drop-zone" for="MapFileInput">
+<span class="upload-icon">↑</span>
+<strong>Choose a .map file</strong>
+<span class="muted">or drop it here</span>
+<input type="file" id="MapFileInput" accept=".map">
+<span class="file-name" id="map-name">No file selected</span>
+</label>
+<button class="button primary" id="MapFileLoad" onclick="LoadMapFile()">Open map ↗</button>
+</section>
+<section class="panel">
+<span class="tool-icon">▷</span>
+<h2>Play a demo</h2>
+<p class="muted">Replay a recorded DDNet session.</p>
+<label class="drop-zone" for="DemoFileInput">
+<span class="upload-icon">↑</span>
+<strong>Choose a .demo file</strong>
+<span class="muted">or drop it here</span>
+<input type="file" id="DemoFileInput" accept=".demo">
+<span class="file-name" id="demo-name">No file selected</span>
+</label>
+<button class="button" id="DemoFileLoad" onclick="LoadDemoFile()">Play demo ↗</button>
+</section>
+</div>
+<p id="viewer-status" role="status" aria-live="polite" class="status">Files are opened locally. The engine downloads when you start the viewer.</p>
+<div id="viewer-shell" hidden>
+<div class="viewer-toolbar">
+<span id="viewer-filename">DDNet Viewer</span>
+<a href="load_map.html">Open another file ↗</a>
+</div>
+<canvas class="game" id="canvas" tabindex="0" aria-label="DDNet map and demo viewer" oncontextmenu="event.preventDefault()">
+</canvas>
+</div>
+<div class="info-strip">
+<span class="dot">
+</span>
+<span>Desktop browser recommended. WebAssembly and browser threads are required.</span>
+</div>
+<script src="load_map.js">
+</script>
+</main>
+<footer>
+<span>DDNet Tools Remake <span class="muted">/ Built for the community</span>
+</span>
+<a href="https://github.com/ddnet/ddnet.github.io">Original project ↗</a>
+</footer>
+<script src="ui.js">
+</script>
+</body>
+</html>

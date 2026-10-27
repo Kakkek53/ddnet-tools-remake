@@ -1,130 +1,74 @@
+/* Keep these globals available to the precompiled DDNet engines. */
 var g_DemoFile;
 var g_MapFile;
+var viewerStarted = false;
 var Module = {
-    print: (function () { return function (text) { console.log(text); }; })(),
-    printErr: function (text) {
-        if (arguments.length > 1)
-            text = Array.prototype.slice.call(arguments).join(' ');
-        if (0) {
-            // dump(text + '\n');
-        }
-    },
-    canvas: (function () {
-        var canvas = document.getElementById('canvas');
-        return canvas;
-    })(),
-    arguments: []
+    print: function (text) { console.log(text); },
+    printErr: function (text) { console.error(text); },
+    canvas: document.getElementById('canvas'),
+    arguments: [],
+    setStatus: function (text) { SetStatus(text || 'Engine ready. Click the viewer to interact.'); },
+    onRuntimeInitialized: function () { SetStatus('Engine initialized. Opening your file…'); },
+    onAbort: function () { SetStatus('The DDNet engine could not start. Reload the page to try again in a desktop browser.', true); }
 };
+function SetStatus(message, error) {
+    var status = document.getElementById('viewer-status');
+    status.textContent = message;
+    status.classList.toggle('error', !!error);
+}
 function RemoveEls() {
-    document.getElementById('DemoFileInput').remove();
-    document.getElementById('DemoFileLoad').remove();
-    document.getElementById('renderdemos').remove();
-    document.getElementById('MapFileInput').remove();
-    document.getElementById('MapFileLoad').remove();
-    document.getElementById('rendermap').remove();
+    document.getElementById('upload-tools').hidden = true;
+    document.getElementById('viewer-shell').hidden = false;
+    document.body.classList.add('viewer-active');
 }
 function GetMapFromURL() {
-    if (location.search === "")
-        return { map: "" };
-    var o = { map: "" };
-    var nvPairs = location.search.substring(1).replace(/\+/g, " ").split("&");
-    nvPairs.forEach(function (pair) {
-        var e = pair.indexOf('=');
-        var n = decodeURIComponent(e < 0 ? pair : pair.substring(0, e)), v = (e < 0 || e + 1 == pair.length)
-            ? null
-            : decodeURIComponent(pair.substring(e + 1, pair.length));
-        o[n] = v;
-    });
-    return o;
+    return { map: new URLSearchParams(location.search).get('map') || '' };
 }
-function OnLoad() {
-    var MapName = GetMapFromURL();
-    if (MapName.map != "") {
-        RemoveEls();
-        var MapReq = new XMLHttpRequest();
-        MapReq.open("GET", MapName.map + ".map", true);
-        MapReq.responseType = "arraybuffer";
-        MapReq.onload = function (evt) {
-            LoadMapFileImpl(MapName.map, evt.target.response, 0);
-        };
-        MapReq.send(null);
+function StartViewer(kind, name, result) {
+    if (viewerStarted) return;
+    if (!window.crossOriginIsolated || typeof SharedArrayBuffer === 'undefined') {
+        SetStatus('Browser threads are not ready. Wait a moment and reload this page. Use HTTPS or localhost in a browser with WebAssembly threads support.', true);
+        return;
     }
+    viewerStarted = true;
+    Module.arguments = [kind === 'map' ? '-m' : '-d', name, result.byteLength.toString()];
+    if (kind === 'map') g_MapFile = new Uint8Array(result);
+    else g_DemoFile = new Uint8Array(result);
+    document.getElementById('viewer-filename').textContent = name;
+    RemoveEls();
+    SetStatus('Downloading the DDNet engine. The first launch may take a moment…');
+    var engine = document.createElement('script');
+    engine.src = kind === 'map' ? 'DDNet_map.js' : 'DDNet_demo.js';
+    engine.onerror = function () { SetStatus('Engine download failed. Reload the page and try again.', true); };
+    document.head.appendChild(engine);
+    Module.canvas.focus();
 }
-function LoadDemoFile() {
-    var DemoFile, fr;
-    if (typeof window.FileReader !== 'function') {
-        console.log("File API not supported.");
-        return;
-    }
-    var FInput = document.getElementById('DemoFileInput');
-    if (!FInput) {
-        console.log("Smth went really wrong.");
-        return;
-    }
-    else if (!FInput.files) {
-        console.log("No files available, browser bug?.");
-        return;
-    }
-    else if (!FInput.files[0]) {
-        console.log("No files selected.");
-    }
-    else {
-        DemoFile = FInput.files[0];
-        fr = new FileReader();
-        fr.onload = GotBinary;
-        fr.readAsArrayBuffer(DemoFile);
-    }
-    function GotBinary() {
-        Module['arguments'].push('-d');
-        Module['arguments'].push(DemoFile.name);
-        g_DemoFile = new Uint8Array(fr.result);
-        Module['arguments'].push(g_DemoFile.byteLength.toString());
-        RemoveEls();
-        document.getElementById('canvas')
-            .style.top = "0px";
-        var DDNetJS = document.createElement("script");
-        DDNetJS.src = "DDNet_demo.js";
-        document.head.appendChild(DDNetJS);
-    }
+function LoadMapFileImpl(name, result) { StartViewer('map', name, result); }
+function ReadLocalFile(kind) {
+    if (viewerStarted) return;
+    var input = document.getElementById(kind === 'map' ? 'MapFileInput' : 'DemoFileInput');
+    var file = input.files[0];
+    if (!file) { SetStatus('Choose a .' + kind + ' file first.', true); input.focus(); return; }
+    if (!file.name.toLowerCase().endsWith('.' + kind)) { SetStatus('This tool needs a .' + kind + ' file.', true); return; }
+    if (!file.size) { SetStatus('This file is empty. Choose another file.', true); return; }
+    var reader = new FileReader();
+    reader.onload = function () { StartViewer(kind, file.name, reader.result); };
+    reader.onerror = function () { SetStatus('This file could not be read. Please select it again.', true); };
+    SetStatus('Reading ' + file.name + '…');
+    reader.readAsArrayBuffer(file);
 }
-function LoadMapFileImpl(Name, Result, RemEls) {
-    Module['arguments'].push('-m');
-    Module['arguments'].push(Name);
-    g_MapFile = new Uint8Array(Result);
-    Module['arguments'].push(g_MapFile.byteLength.toString());
-    if (RemEls == 1)
-        RemoveEls();
-    document.getElementById('canvas').style.top =
-        "0px";
-    var DDNetJS = document.createElement("script");
-    DDNetJS.src = "DDNet_map.js";
-    document.head.appendChild(DDNetJS);
+function LoadDemoFile() { ReadLocalFile('demo'); }
+function LoadMapFile() { ReadLocalFile('map'); }
+async function OnLoad() {
+    var map = GetMapFromURL().map;
+    if (!map) return;
+    SetStatus('Downloading map…');
+    try {
+        var response = await fetch(map + '.map');
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        var data = await response.arrayBuffer();
+        if (!data.byteLength) throw new Error('Empty map');
+        LoadMapFileImpl(map, data);
+    } catch (error) { SetStatus('Could not download the map. Check the link or choose a local file. ' + error.message, true); }
 }
-function LoadMapFile() {
-    var MapFile, fr;
-    if (typeof window.FileReader !== 'function') {
-        console.log("File API not supported.");
-        return;
-    }
-    var FInput = document.getElementById('MapFileInput');
-    if (!FInput) {
-        console.log("Smth went really wrong.");
-        return;
-    }
-    else if (!FInput.files) {
-        console.log("No files available, browser bug?.");
-        return;
-    }
-    else if (!FInput.files[0]) {
-        console.log("No files selected.");
-    }
-    else {
-        MapFile = FInput.files[0];
-        fr = new FileReader();
-        fr.onload = GotBinary;
-        fr.readAsArrayBuffer(MapFile);
-    }
-    function GotBinary() {
-        LoadMapFileImpl(MapFile.name, fr.result, 1);
-    }
-}
+window.addEventListener('load', OnLoad);

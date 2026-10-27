@@ -1,44 +1,70 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-	<head>
-		<meta charset="utf-8">
-		<meta name="viewport" content="width=device-width, initial-scale=1.0">
-		<title>Team Color Visualization</title>
-		<style>
-			body {
-				background: #ccc;
-				font-family: sans-serif;
-			}
-			h1 {
-				font-size: 16pt;
-			}
-			.colorGroup {
-				display: flex;
-				flex-wrap: wrap;
-				margin: 0;
-				padding: 0;
-			}
-			.colorGroup > div {
-				width: 32px;
-				height: 32px;
-				box-sizing: border-box;
-				border: 1px solid #333;
-				margin: 2px;
-				display: flex;
-				justify-content: center;
-				align-items: center;
-				font-weight: bold;
-			}
-		</style>
-	</head>
-	<body>
-		<h1>Version 17.2 and older</h1>
-		<div id="old" class="colorGroup"></div>
-		<h1>Version 17.3 and newer</h1>
-		<div id="new" class="colorGroup"></div>
-		<h1>Version 17.3 and newer (sorted by hue)</h1>
-		<div id="newSorted" class="colorGroup"></div>
-		<script>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#111214">
+<title>Team Colors · DDNet Tools</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="topbar">
+<a class="brand" href="index.html">
+<span class="brand-icon">D<span>↗</span>
+</span>
+<span>DDNet<span class="brand-light">Tools</span>
+<small>REMAKE</small>
+</span>
+</a>
+<nav aria-label="Main navigation">
+<a href="index.html">Overview</a>
+<a href="load_map.html">Map & Demo</a>
+<a href="team-colors.html">Team Colors</a>
+</nav>
+<a class="github" href="https://github.com/Kakkek53/ddnet-tools-remake">GitHub ↗</a>
+</header>
+<main>
+<section class="page-heading">
+<div class="eyebrow">02 / VISUALIZATION</div>
+<h1>Find your team's <span>color.</span>
+</h1>
+<p>64 teams. Two approaches. See how the golden angle changes the palette.</p>
+</section>
+<section class="panel color-panel">
+<div class="section-heading">
+<div>
+<span class="tag">CLASSIC PALETTE</span>
+<h2>Version 17.2 and older</h2>
+</div>
+<span class="muted">Evenly spaced hues</span>
+</div>
+<div id="old" class="colorGroup">
+</div>
+</section>
+<section class="panel color-panel">
+<div class="section-heading">
+<div>
+<span class="tag orange">GOLDEN ANGLE</span>
+<h2>Version 17.3 and newer</h2>
+</div>
+<span class="muted">137.50776° between teams</span>
+</div>
+<div id="new" class="colorGroup">
+</div>
+</section>
+<section class="panel color-panel">
+<div class="section-heading">
+<div>
+<span class="tag">SORTED PALETTE</span>
+<h2>Ordered by hue</h2>
+</div>
+<span class="muted">Same colors. A different perspective.</span>
+</div>
+<div id="newSorted" class="colorGroup">
+</div>
+</section>
+<p class="status">Numbers identify teams. <a href="https://github.com/ddnet/ddnet/pull/7129">About the golden angle update ↗</a>
+</p>		<script>
 			function generateDivs() {
 				for (let i = 0; i < 64; i++) {
 					const div = document.createElement("div");
@@ -65,5 +91,13 @@
 			}
 			window.onload = generateDivs;
 		</script>
-	</body>
+</main>
+<footer>
+<span>DDNet Tools Remake <span class="muted">/ Built for the community</span>
+</span>
+<a href="https://github.com/ddnet/ddnet.github.io">Original project ↗</a>
+</footer>
+<script src="ui.js">
+</script>
+</body>
 </html>
