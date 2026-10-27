@@ -51,7 +51,7 @@ function updateEstimate() {
     if (!source) return;
     try {
         const plan = getPlan();
-        $('media-estimate').textContent = `${plan.width} × ${plan.height} px · ${plan.count} frame${plan.count === 1 ? '' : 's'} · ${plan.pages.length} atlas${plan.pages.length === 1 ? '' : 'es'} · ${(plan.textureBytes / 1048576).toFixed(1)} MiB texture memory${source.animated ? ` · ${(plan.totalMs / 1000).toFixed(3)} s loop` : ''}`;
+        $('media-estimate').textContent = `${plan.width} × ${plan.height} px · ${plan.count} frame${plan.count === 1 ? '' : 's'} · ${plan.pages.length} atlas${plan.pages.length === 1 ? '' : 'es'} · ${(plan.textureBytes / 1048576).toFixed(1)} MiB texture memory · ${$('media-placement').value === 'object' ? 'map object' : 'full-screen background'}${source.animated ? ` · ${(plan.totalMs / 1000).toFixed(3)} s loop` : ''}`;
         $('convert-media').disabled = false;
         say('Ready to create your map.');
     } catch (error) { $('convert-media').disabled = true; $('media-estimate').textContent = error.message; say(error.message, true); }
@@ -81,7 +81,8 @@ fileInput.addEventListener('change', async () => {
             if (!Number.isFinite(video.duration) || video.duration <= 0 || !video.videoWidth) throw new Error('The video has no usable duration or frames.');
             source = { file, animated, width: video.videoWidth, height: video.videoHeight, duration: video.duration };
             $('clip-start').value = 0;
-            $('clip-end').value = Math.min(video.duration, 10).toFixed(3);
+            $('media-resolution').value = '1920';
+            $('clip-end').value = Math.min(video.duration, 5).toFixed(3);
             $('clip-end').max = video.duration; $('clip-start').max = video.duration;
             $('source-details').textContent = `${video.videoWidth} × ${video.videoHeight} · ${video.duration.toFixed(3)} seconds · video`;
             video.hidden = false; $('video-settings').hidden = false;
@@ -90,6 +91,7 @@ fileInput.addEventListener('change', async () => {
             if (id !== generation) return;
             if (!image.naturalWidth) throw new Error('The image could not be decoded.');
             source = { file, animated, width: image.naturalWidth, height: image.naturalHeight };
+            $('media-resolution').value = '4096';
             $('source-details').textContent = `${image.naturalWidth} × ${image.naturalHeight} · still image`;
             image.hidden = false;
         }
@@ -97,7 +99,7 @@ fileInput.addEventListener('change', async () => {
         updateEstimate();
     } catch (error) { if (id === generation) say(error.message, true); }
 });
-for (const id of ['media-fps', 'media-resolution', 'clip-start', 'clip-end']) $(id).addEventListener('input', updateEstimate);
+for (const id of ['media-fps', 'media-resolution', 'media-placement', 'clip-start', 'clip-end']) $(id).addEventListener('input', updateEstimate);
 const zone = $('media-drop');
 zone.addEventListener('dragover', event => { event.preventDefault(); zone.classList.add('dragging'); });
 zone.addEventListener('dragleave', () => zone.classList.remove('dragging'));
@@ -129,7 +131,7 @@ $('convert-media').addEventListener('click', async () => {
     revokeDownload(); busy(true); video.pause();
     $('conversion-progress').max = plan.count; $('conversion-progress').value = 0;
     try {
-        const map = new MediaMap(plan, source.animated, signal);
+        const map = new MediaMap(plan, source.animated, signal, { placement: $('media-placement').value });
         for (const page of plan.pages) {
             checkAbort(signal);
             canvas.width = page.width; canvas.height = page.height;
@@ -137,17 +139,21 @@ $('convert-media').addEventListener('click', async () => {
                 checkAbort(signal);
                 const index = page.first + local;
                 if (source.animated) await seek(Math.min(plan.start + index / plan.fps, source.duration - 0.00001), signal);
+                frameContext.imageSmoothingEnabled = true;
+                frameContext.imageSmoothingQuality = 'high';
                 frameContext.clearRect(0, 0, plan.width, plan.height);
                 frameContext.drawImage(source.animated ? video : image, 0, 0, plan.width, plan.height);
-                const x = (local % page.columns) * (plan.width + 4) + 2;
-                const y = Math.floor(local / page.columns) * (plan.height + 4) + 2;
+                const x = (local % page.columns) * (plan.width + page.padding * 2) + page.padding;
+                const y = Math.floor(local / page.columns) * (plan.height + page.padding * 2) + page.padding;
                 // Duplicate a two-pixel border to avoid sampling neighboring frames.
                 atlasContext.drawImage(frame, x, y);
-                atlasContext.drawImage(frame, 0, 0, 1, plan.height, x - 2, y, 2, plan.height);
-                atlasContext.drawImage(frame, plan.width - 1, 0, 1, plan.height, x + plan.width, y, 2, plan.height);
-                atlasContext.drawImage(frame, 0, 0, plan.width, 1, x, y - 2, plan.width, 2);
-                atlasContext.drawImage(frame, 0, plan.height - 1, plan.width, 1, x, y + plan.height, plan.width, 2);
-                for (const [sx, sy, dx, dy] of [[0, 0, x - 2, y - 2], [plan.width - 1, 0, x + plan.width, y - 2], [0, plan.height - 1, x - 2, y + plan.height], [plan.width - 1, plan.height - 1, x + plan.width, y + plan.height]]) atlasContext.drawImage(frame, sx, sy, 1, 1, dx, dy, 2, 2);
+                if (page.padding) {
+                    atlasContext.drawImage(frame, 0, 0, 1, plan.height, x - 2, y, 2, plan.height);
+                    atlasContext.drawImage(frame, plan.width - 1, 0, 1, plan.height, x + plan.width, y, 2, plan.height);
+                    atlasContext.drawImage(frame, 0, 0, plan.width, 1, x, y - 2, plan.width, 2);
+                    atlasContext.drawImage(frame, 0, plan.height - 1, plan.width, 1, x, y + plan.height, plan.width, 2);
+                    for (const [sx, sy, dx, dy] of [[0, 0, x - 2, y - 2], [plan.width - 1, 0, x + plan.width, y - 2], [0, plan.height - 1, x - 2, y + plan.height], [plan.width - 1, plan.height - 1, x + plan.width, y + plan.height]]) atlasContext.drawImage(frame, sx, sy, 1, 1, dx, dy, 2, 2);
+                }
                 $('conversion-progress').value = index + 1;
                 say(`Capturing frame ${index + 1} / ${plan.count}…`);
                 // Give the browser time to paint progress and handle cancellation.

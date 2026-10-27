@@ -74,7 +74,7 @@ test('embedded image, quads, groups, spawn and game layer form a valid DATA file
     const map = await readMap(await writer.finish());
     assert.equal(get(map,3).length,0); assert.equal(get(map,6).length,0);
     const im=get(map,2)[0].values;assert.deepEqual(im.slice(0,4),[1,page.width,page.height,0]);assert.deepEqual(map.data[im[5]],Buffer.from(rgba));
-    const groups=get(map,4);assert.equal(groups.length,2);
+    const groups=get(map,4);assert.equal(groups.length,3);
     const layers=get(map,5);assert.equal(layers.length,3);
     const quadLayer=layers[0].values;assert.equal(quadLayer[1],3);assert.equal(map.data[quadLayer[5]].length,152);
     const quad=map.data[quadLayer[5]];assert.equal(quad.readInt32LE(36*4),-1); // no color envelope for an image
@@ -106,4 +106,41 @@ test('cancellation prevents producing partial output',async()=>{
 });
 test('names use DDNet signed-byte packing',()=>{
     const name=packedName('Game',3);assert.equal(name[0]>>>0,0xc7e1ede5);assert.equal(name.at(-1)&255,0);
+});
+
+test('background matches Night Themes coverage and ignores camera movement and zoom', async () => {
+    const plan = planMedia(1920,1080,4096,1,1), writer = new MediaMap(plan,false);
+    const page = plan.pages[0];
+    assert.equal(plan.width,1920); assert.equal(plan.height,1080);
+    assert.equal(page.width,1920); assert.equal(page.height,1080); assert.equal(page.padding,0);
+    await writer.addAtlas(page,new Uint8Array(page.width*page.height*4));
+    const map = await readMap(await writer.finish());
+    const bg=get(map,4)[0].values;assert.deepEqual(bg.slice(1,5),[0,0,0,0]);
+    const layer=get(map,5)[0].values, q=map.data[layer[5]];
+    const x=q.readInt32LE(0)/1024,y=q.readInt32LE(4)/1024;
+    const right=q.readInt32LE(8)/1024,bottom=q.readInt32LE(20)/1024;
+    assert.ok(x<=-832&&right>=832&&y<=-640&&bottom>=640);
+    assert.ok(Math.abs((right-x)/(bottom-y)-1920/1080)<0.00001);
+    assert.ok(Math.abs(x+right)<0.001);assert.ok(Math.abs(y+bottom)<0.001);
+    // All normal DDNet viewport aspects fit inside reference bounds, including ultrawide.
+    for (const aspect of [9/16,4/3,16/9,21/9,32/9]) {
+        let h=Math.sqrt(1150*1000/aspect),w=h*aspect;
+        if(w>1500){w=1500;h=w/aspect;}if(h>1050){h=1050;w=h*aspect;}
+        assert.ok(right-x>=w&&bottom-y>=h);
+    }
+    for(const g of get(map,4).slice(1))assert.deepEqual(g.values.slice(3,5),[100,100]);
+});
+test('native odd-sized textures preserve source pixels and high-resolution frames do not waste atlas space',()=>{
+    const image=planMedia(3001,1999,4096,1,1);
+    assert.equal(image.width,3001);assert.equal(image.height,1999);
+    assert.equal(image.textureBytes,3001*1999*4);
+    const video=planMedia(1920,1080,1920,5,10);
+    assert.equal(video.pages.length,50);assert.equal(video.textureBytes,50*1920*1080*4);
+    assert.throws(()=>planMedia(3840,2160,4096,5,10),/texture memory/);
+});
+test('object placement remains available',async()=>{
+    const plan=planMedia(64,32,1024,1,1),writer=new MediaMap(plan,false,undefined,{placement:'object'});
+    const page=plan.pages[0];await writer.addAtlas(page,new Uint8Array(page.width*page.height*4));
+    const map=await readMap(await writer.finish());assert.deepEqual(get(map,4)[0].values.slice(3,5),[100,100]);
+    const q=map.data[get(map,5)[0].values[5]];assert.equal(q.readInt32LE(0)/1024,128);assert.equal(q.readInt32LE(4)/1024,96);
 });

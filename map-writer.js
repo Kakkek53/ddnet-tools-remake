@@ -61,27 +61,34 @@ export class DataFile {
 }
 const powerOfTwo = n => 2 ** Math.ceil(Math.log2(n));
 export function planMedia(sourceWidth, sourceHeight, maxEdge, duration, fps) {
-    if (![sourceWidth, sourceHeight, maxEdge, duration, fps].every(Number.isFinite) || sourceWidth <= 0 || sourceHeight <= 0 || duration <= 0 || duration > 600 || fps < 1 || fps > 60 || maxEdge < 64 || maxEdge > 1024) {
-        throw new Error('Use a valid source, 1–60 FPS, a 64–1024 px resolution, and a clip up to 600 seconds.');
+    if (![sourceWidth, sourceHeight, maxEdge, duration, fps].every(Number.isFinite) || sourceWidth <= 0 || sourceHeight <= 0 || duration <= 0 || duration > 600 || fps < 1 || fps > 60 || maxEdge < 64 || maxEdge > 4096) {
+        throw new Error('Use a valid source, 1–60 FPS, a 64–4096 px resolution, and a clip up to 600 seconds.');
     }
     const scale = Math.min(1, maxEdge / Math.max(sourceWidth, sourceHeight));
-    const width = Math.max(2, Math.round(sourceWidth * scale / 2) * 2);
-    const height = Math.max(2, Math.round(sourceHeight * scale / 2) * 2);
+    const width = scale === 1 ? sourceWidth : Math.max(2, Math.round(sourceWidth * scale / 2) * 2);
+    const height = scale === 1 ? sourceHeight : Math.max(2, Math.round(sourceHeight * scale / 2) * 2);
     const totalMs = Math.max(1, Math.round(duration * 1000));
     let count = Math.max(1, Math.ceil(duration * fps - 1e-7));
     // Millisecond envelope timestamps cannot represent a zero-length last frame.
     while (count > 1 && Math.round((count - 1) * 1000 / fps) >= totalMs) count--;
     if (count > 600) throw new Error(`${count} frames requested. Use at most 600 frames: reduce FPS or shorten the clip.`);
-    const columns = Math.min(count, Math.floor(2048 / (width + 4)));
-    const rows = Math.floor(2048 / (height + 4));
+    // Full-resolution frames use dedicated, exact-size textures. Padding a 1920×1080
+    // frame to a power-of-two atlas wastes memory and can soften its UV sampling.
+    const dedicated = Math.max(width, height) > 1024;
+    const padding = dedicated ? 0 : 2;
+    const cellWidth = width + padding * 2, cellHeight = height + padding * 2;
+    const columns = dedicated ? 1 : Math.min(count, Math.floor(2048 / cellWidth));
+    const rows = dedicated ? 1 : Math.floor(2048 / cellHeight);
     const perPage = columns * rows;
     const pages = [];
     for (let first = 0; first < count; first += perPage) {
         const frames = Math.min(perPage, count - first);
-        pages.push({ first, frames, columns: Math.min(columns, frames), width: powerOfTwo(Math.min(columns, frames) * (width + 4)), height: powerOfTwo(Math.ceil(frames / columns) * (height + 4)) });
+        pages.push({ first, frames, columns: Math.min(columns, frames), padding,
+            width: dedicated ? width : powerOfTwo(Math.min(columns, frames) * cellWidth),
+            height: dedicated ? height : powerOfTwo(Math.ceil(frames / columns) * cellHeight) });
     }
     const textureBytes = pages.reduce((sum, page) => sum + page.width * page.height * 4, 0);
-    if (pages.length > 64 || textureBytes > 128 * 1024 * 1024) throw new Error('This clip needs too much texture memory. Lower the resolution, FPS, or duration (128 MiB maximum).');
+    if (pages.length > 64 || textureBytes > 512 * 1024 * 1024) throw new Error('This clip needs too much texture memory. Lower the resolution, FPS, or duration (512 MiB / 64 textures maximum).');
     if (count > totalMs) throw new Error('The clip is too short for this frame rate.');
     return { width, height, count, fps, duration, totalMs, pages, textureBytes };
 }
@@ -101,15 +108,21 @@ function quad(x, y, width, height, uv, env = -1, color = [255, 255, 255, 255]) {
     return [x, y, x + width, y, x, y + height, x + width, y + height, x + width / 2, y + height / 2].map(fx)
         .concat(Array(4).fill(color).flat(), uv.map(fx), [-1, 0, env, 0]);
 }
-function group(writer, id, first, count, name) {
-    writer.item(4, id, [3, 0, 0, 100, 100, first, count, 0, 0, 0, 0, 0, ...packedName(name, 3)]);
+function group(writer, id, first, count, name, parallax = 100) {
+    writer.item(4, id, [3, 0, 0, parallax, parallax, first, count, 0, 0, 0, 0, 0, ...packedName(name, 3)]);
 }
 export class MediaMap {
-    constructor(plan, animated, signal) {
+    constructor(plan, animated, signal, options = {}) {
         this.plan = plan; this.animated = animated; this.writer = new DataFile(signal);
         this.points = []; this.nextPage = 0;
-        const scale = 1024 / Math.max(plan.width, plan.height);
+        this.background = options.placement !== 'object';
+        // Night Themes.map uses a centered 1664×1280 background with 0/0 parallax.
+        // DDNet's normal viewport is capped at 1500×1050 world units. Cover the
+        // reference bounds, preserving the media aspect ratio rather than stretching.
+        const scale = this.background ? Math.max(1664 / plan.width, 1280 / plan.height) : 1024 / Math.max(plan.width, plan.height);
         this.worldWidth = plan.width * scale; this.worldHeight = plan.height * scale;
+        this.worldX = this.background ? -this.worldWidth / 2 : 128;
+        this.worldY = this.background ? -this.worldHeight / 2 : 96;
         this.writer.item(0, 0, [1]);
     }
     async addAtlas(page, rgba) {
@@ -122,11 +135,11 @@ export class MediaMap {
         const quads = [];
         for (let local = 0; local < page.frames; local++) {
             const index = page.first + local;
-            const x = (local % page.columns) * (plan.width + 4) + 2;
-            const y = Math.floor(local / page.columns) * (plan.height + 4) + 2;
+            const x = (local % page.columns) * (plan.width + page.padding * 2) + page.padding;
+            const y = Math.floor(local / page.columns) * (plan.height + page.padding * 2) + page.padding;
             const u0 = x / page.width, v0 = y / page.height;
             const u1 = (x + plan.width) / page.width, v1 = (y + plan.height) / page.height;
-            quads.push(...quad(128, 96, this.worldWidth, this.worldHeight, [u0, v0, u1, v0, u0, v1, u1, v1], this.animated ? index : -1));
+            quads.push(...quad(this.worldX, this.worldY, this.worldWidth, this.worldHeight, [u0, v0, u1, v0, u0, v1, u1, v1], this.animated ? index : -1));
             if (this.animated) {
                 const points = frameEnvelope(index, plan);
                 writer.item(3, index, [2, 4, this.points.length / 6, points.length / 6, ...packedName(`Frame ${index + 1}`, 8), 1]);
@@ -143,21 +156,22 @@ export class MediaMap {
         const version = await writer.string('1');
         const credits = await writer.string(this.animated ? `Media to map: ${plan.count} frames at ${plan.fps} FPS, loop ${plan.totalMs} ms` : 'Image to map');
         writer.item(1, 0, [1, author, version, credits, -1]);
-        const floorY = Math.ceil((96 + this.worldHeight) / 32) + 2;
-        const width = Math.ceil((256 + this.worldWidth) / 32), height = floorY + 3;
+        const floorY = this.background ? 21 : Math.ceil((96 + this.worldHeight) / 32) + 2;
+        const width = this.background ? 40 : Math.ceil((256 + this.worldWidth) / 32), height = floorY + 3;
         // A visible platform and a real game layer make the file usable in the editor/server.
         const platform = quad(0, floorY * 32, width * 32, 96, [0, 0, 1, 0, 0, 1, 1, 1], -1, [90, 98, 110, 255]);
         const platformData = await writer.raw(ints(platform));
         const floorLayer = plan.pages.length;
         writer.item(5, floorLayer, [0, 3, 0, 2, 1, platformData, -1, ...packedName('Platform', 3)]);
-        group(writer, 0, 0, floorLayer + 1, 'Media');
+        group(writer, 0, 0, floorLayer, this.background ? 'Background' : 'Media', this.background ? 0 : 100);
+        group(writer, 1, floorLayer, 1, 'Platform');
         const tiles = new Uint8Array(width * height * 4);
         for (let y = floorY; y < height; y++) for (let x = 0; x < width; x++) tiles[(y * width + x) * 4] = 1;
         tiles[((floorY - 2) * width + Math.floor(width / 2)) * 4] = 192; // ENTITY_OFFSET + ENTITY_SPAWN
         const tileData = await writer.raw(tiles);
         const gameLayer = floorLayer + 1;
         writer.item(5, gameLayer, [0, 2, 0, 3, width, height, 1, 255, 255, 255, 255, -1, 0, -1, tileData, ...packedName('Game', 3), -1, -1, -1, -1, -1]);
-        group(writer, 1, gameLayer, 1, 'Game');
+        group(writer, 2, gameLayer, 1, 'Game');
         if (this.animated) writer.item(6, 0, this.points);
         return writer.finish();
     }
