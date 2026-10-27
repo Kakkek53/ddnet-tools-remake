@@ -1,0 +1,35 @@
+name: Install DDNet editor runtime
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/editor-assets.yml'
+      - 'scripts/install-editor-runtime.py'
+  workflow_dispatch:
+permissions:
+  contents: write
+  pages: write
+concurrency:
+  group: editor-runtime-install
+  cancel-in-progress: false
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download and verify official DDNet WASM release
+        run: python3 scripts/install-editor-runtime.py
+      - name: Commit runtime files
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add vendor/ddnet-editor
+          if ! git diff --cached --quiet; then
+            git commit -m 'Vendor verified official DDNet 20.2.1 WASM editor runtime'
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
+      - name: Request GitHub Pages build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method POST repos/${{ github.repository }}/pages/builds
