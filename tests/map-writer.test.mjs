@@ -74,8 +74,8 @@ test('embedded image, quads, groups, spawn and game layer form a valid DATA file
     const map = await readMap(await writer.finish());
     assert.equal(get(map,3).length,0); assert.equal(get(map,6).length,0);
     const im=get(map,2)[0].values;assert.deepEqual(im.slice(0,4),[1,page.width,page.height,0]);assert.deepEqual(map.data[im[5]],Buffer.from(rgba));
-    const groups=get(map,4);assert.equal(groups.length,3);
-    const layers=get(map,5);assert.equal(layers.length,3);
+    const groups=get(map,4);assert.equal(groups.length,2);
+    const layers=get(map,5);assert.equal(layers.length,2);
     const quadLayer=layers[0].values;assert.equal(quadLayer[1],3);assert.equal(map.data[quadLayer[5]].length,152);
     const quad=map.data[quadLayer[5]];assert.equal(quad.readInt32LE(36*4),-1); // no color envelope for an image
     const game=layers.at(-1).values;assert.equal(game.length*4,92);assert.equal(game[6],1);
@@ -143,4 +143,18 @@ test('object placement remains available',async()=>{
     const page=plan.pages[0];await writer.addAtlas(page,new Uint8Array(page.width*page.height*4));
     const map=await readMap(await writer.finish());assert.deepEqual(get(map,4)[0].values.slice(3,5),[100,100]);
     const q=map.data[get(map,5)[0].values[5]];assert.equal(q.readInt32LE(0)/1024,128);assert.equal(q.readInt32LE(4)/1024,96);
+});
+
+test('full-screen background has no gray platform or other untextured quad overlay',async()=>{
+    for(const animated of [false,true]){
+        const plan=planMedia(128,72,512,1,animated?3:1),writer=new MediaMap(plan,animated);
+        for(const page of plan.pages)await writer.addAtlas(page,new Uint8Array(page.width*page.height*4).fill(255));
+        const map=await readMap(await writer.finish());
+        const quads=get(map,5).filter(l=>l.values[1]===3);
+        assert.equal(quads.length,plan.pages.length);
+        assert.ok(quads.every(l=>l.values[6]>=0),'no untextured platform may cover a background');
+        assert.equal(get(map,4).length,2);
+        const layerIds=get(map,4).flatMap(g=>Array.from({length:g.values[6]},(_,i)=>g.values[5]+i));
+        assert.deepEqual(layerIds,get(map,5).map(l=>l.id));
+    }
 });

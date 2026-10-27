@@ -158,20 +158,23 @@ export class MediaMap {
         writer.item(1, 0, [1, author, version, credits, -1]);
         const floorY = this.background ? 21 : Math.ceil((96 + this.worldHeight) / 32) + 2;
         const width = this.background ? 40 : Math.ceil((256 + this.worldWidth) / 32), height = floorY + 3;
-        // A visible platform and a real game layer make the file usable in the editor/server.
-        const platform = quad(0, floorY * 32, width * 32, 96, [0, 0, 1, 0, 0, 1, 1, 1], -1, [90, 98, 110, 255]);
-        const platformData = await writer.raw(ints(platform));
-        const floorLayer = plan.pages.length;
-        writer.item(5, floorLayer, [0, 3, 0, 2, 1, platformData, -1, ...packedName('Platform', 3)]);
-        group(writer, 0, 0, floorLayer, this.background ? 'Background' : 'Media', this.background ? 0 : 100);
-        group(writer, 1, floorLayer, 1, 'Platform');
+        // A background must contain only the media, with no visible demo platform.
+        // The old gray quad was drawn over the full-screen image and looked like a gap.
+        const mediaLayers = plan.pages.length;
+        group(writer, 0, 0, mediaLayers, this.background ? 'Background' : 'Media', this.background ? 0 : 100);
+        if (!this.background) {
+            const platform = quad(0, floorY * 32, width * 32, 96, [0, 0, 1, 0, 0, 1, 1, 1], -1, [90, 98, 110, 255]);
+            const platformData = await writer.raw(ints(platform));
+            writer.item(5, mediaLayers, [0, 3, 0, 2, 1, platformData, -1, ...packedName('Platform', 3)]);
+            group(writer, 1, mediaLayers, 1, 'Platform');
+        }
         const tiles = new Uint8Array(width * height * 4);
         for (let y = floorY; y < height; y++) for (let x = 0; x < width; x++) tiles[(y * width + x) * 4] = 1;
         tiles[((floorY - 2) * width + Math.floor(width / 2)) * 4] = 192; // ENTITY_OFFSET + ENTITY_SPAWN
         const tileData = await writer.raw(tiles);
-        const gameLayer = floorLayer + 1;
+        const gameLayer = mediaLayers + (this.background ? 0 : 1);
         writer.item(5, gameLayer, [0, 2, 0, 3, width, height, 1, 255, 255, 255, 255, -1, 0, -1, tileData, ...packedName('Game', 3), -1, -1, -1, -1, -1]);
-        group(writer, 2, gameLayer, 1, 'Game');
+        group(writer, this.background ? 1 : 2, gameLayer, 1, 'Game');
         if (this.animated) writer.item(6, 0, this.points);
         return writer.finish();
     }
